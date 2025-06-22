@@ -1,0 +1,35 @@
+{
+  "name": "ai-livestream-bot",
+  "version": "1.0.0",
+  "description": "A YouTube livestream bot built with TypeScript",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "ts-node src/index.ts",
+    "dev": "ts-node src/index.ts",
+    "test": "ts-node src/test.ts",
+    "watch": "tsc --watch",
+    "setup-oauth2": "ts-node src/setup-oauth2.ts"
+  },
+  "keywords": [
+    "youtube",
+    "livestream",
+    "bot",
+    "typescript"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.6.0",
+    "dotenv": "^16.3.1",
+    "googleapis": "^128.0.0",
+    "open": "^10.1.2",
+    "ws": "^8.14.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.8.0",
+    "@types/ws": "^8.5.8",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.2.2"
+  }
+}
