@@ -113,3 +113,5 @@ token.json
 
 # YouTube API keys (if stored locally)
 youtube-api-key.txt 
+audio_output/
+service-account.json

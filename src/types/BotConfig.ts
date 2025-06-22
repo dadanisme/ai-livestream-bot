@@ -17,4 +17,13 @@ export interface BotConfig {
   // AI configuration
   ai?: AIConfig;
   enableAI?: boolean; // default false
+  
+  // Voice configuration
+  enableVoice?: boolean; // default false
+  voice?: {
+    enableTTS: boolean;
+    enableAudioOutput: boolean;
+    ttsConfig?: any;
+    audioStreamConfig?: any;
+  };
 } 

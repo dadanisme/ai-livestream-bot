@@ -30,6 +30,33 @@ async function main() {
       ai: getAIConfig({
         systemPrompt: HOLLOW_KNIGHT_PROMPT,
       }),
+      // Voice Configuration
+      enableVoice: true,
+      voice: {
+        enableTTS: true,
+        enableAudioOutput: true,
+        ttsConfig: {
+          // Google Cloud TTS configuration
+          projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
+          keyFilename: process.env.GOOGLE_CLOUD_KEY_FILE,
+          voice: {
+            languageCode: "id-ID",
+            name: "id-ID-Standard-A",
+            ssmlGender: "FEMALE"
+          },
+          audioConfig: {
+            audioEncoding: "MP3",
+            speakingRate: 2,
+            pitch: 0.5
+          }
+        },
+        audioStreamConfig: {
+          // Audio streaming configuration
+          outputPath: "./audio_output",
+          format: "mp3",
+          sampleRate: 22050
+        }
+      }
     });
 
     await bot.start();

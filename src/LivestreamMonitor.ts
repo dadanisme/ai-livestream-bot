@@ -3,6 +3,7 @@ import { BotConfig } from "./types/BotConfig";
 import { LivestreamInfo, LiveChatMessage } from "./types/YouTubeTypes";
 import { youtube_v3 } from "googleapis";
 import { AIService } from "./services/AIService";
+import { AIVoiceService } from "./services/AIVoiceService";
 import { ChatContext } from "./types/AITypes";
 
 export class LivestreamMonitor {
@@ -14,6 +15,7 @@ export class LivestreamMonitor {
   private currentLivestream?: LivestreamInfo;
   private lastChatToken?: string;
   private aiService?: AIService;
+  private aiVoiceService?: AIVoiceService;
   private lastMessageTime: number = 0;
   private readonly MESSAGE_COOLDOWN = 3000; // 3 seconds between messages
 
@@ -21,10 +23,22 @@ export class LivestreamMonitor {
     this.youtube = youtube;
     this.config = config;
     this.logger = logger;
-    
+
     if (config.enableAI && config.ai) {
-      this.aiService = new AIService(config.ai);
-      this.logger.info("🤖 AI service initialized");
+      if (config.enableVoice && config.voice) {
+        // Use voice service if enabled
+        this.aiVoiceService = new AIVoiceService(new AIService(config.ai), {
+          enableTTS: config.voice.enableTTS,
+          enableAudioOutput: config.voice.enableAudioOutput,
+          ttsConfig: config.voice.ttsConfig,
+          audioStreamConfig: config.voice.audioStreamConfig,
+        });
+        this.logger.info("🤖 AI Voice service initialized");
+      } else {
+        // Use regular AI service
+        this.aiService = new AIService(config.ai);
+        this.logger.info("🤖 AI service initialized");
+      }
     }
   }
 
@@ -54,14 +68,20 @@ export class LivestreamMonitor {
 
       if (livestreams.length > 0) {
         const livestream = livestreams[0];
-        if (!this.currentLivestream || this.currentLivestream.id !== livestream.id) {
+        if (
+          !this.currentLivestream ||
+          this.currentLivestream.id !== livestream.id
+        ) {
           this.logger.info("🎥 New livestream detected:", livestream.title);
           await this.onLivestreamStart(livestream);
         }
         this.currentLivestream = livestream;
       } else {
         if (this.currentLivestream) {
-          this.logger.info("🏁 Livestream ended:", this.currentLivestream.title);
+          this.logger.info(
+            "🏁 Livestream ended:",
+            this.currentLivestream.title
+          );
           await this.stopChatMonitoring();
           this.currentLivestream = undefined;
         }
@@ -94,7 +114,9 @@ export class LivestreamMonitor {
       .filter((livestream) => livestream.status !== "ended");
   }
 
-  private getBroadcastStatus(status?: youtube_v3.Schema$LiveBroadcastStatus): "upcoming" | "live" | "ended" {
+  private getBroadcastStatus(
+    status?: youtube_v3.Schema$LiveBroadcastStatus
+  ): "upcoming" | "live" | "ended" {
     if (!status) return "upcoming";
     if (status.lifeCycleStatus === "complete") return "ended";
     if (status.lifeCycleStatus === "live") return "live";
@@ -111,7 +133,7 @@ export class LivestreamMonitor {
     this.logger.info("💬 Starting chat monitoring...");
     this.lastChatToken = undefined;
     await this.fetchChatMessages(liveChatId);
-    
+
     this.chatIntervalId = setInterval(async () => {
       await this.fetchChatMessages(liveChatId);
     }, 5000);
@@ -135,7 +157,7 @@ export class LivestreamMonitor {
       });
 
       const messages = response.data.items || [];
-      
+
       // Print all messages immediately
       for (const message of messages) {
         const chatMessage: LiveChatMessage = {
@@ -159,8 +181,10 @@ export class LivestreamMonitor {
           timestamp: message.snippet?.publishedAt || "",
           type: (message.snippet?.type as any) || "textMessageEvent",
         }))
-        .filter((chatMessage) => 
-          !chatMessage.authorChannelId || chatMessage.authorChannelId !== this.config.channelId
+        .filter(
+          (chatMessage) =>
+            !chatMessage.authorChannelId || chatMessage.authorChannelId !== this.config.channelId
+          // true
         );
 
       if (eligibleMessages.length > 0) {
@@ -174,7 +198,10 @@ export class LivestreamMonitor {
     }
   }
 
-  private async sendChatMessage(liveChatId: string, message: string): Promise<void> {
+  private async sendChatMessage(
+    liveChatId: string,
+    message: string
+  ): Promise<void> {
     // Rate limiting: don't send messages too frequently
     const now = Date.now();
     if (now - this.lastMessageTime < this.MESSAGE_COOLDOWN) {
@@ -195,7 +222,7 @@ export class LivestreamMonitor {
           },
         },
       });
-      
+
       this.lastMessageTime = now;
       this.logger.info(`💬 Sent message: ${message}`);
     } catch (error) {
@@ -212,29 +239,19 @@ export class LivestreamMonitor {
   }
 
   private async processBatchWithAI(messages: LiveChatMessage[]): Promise<void> {
-    if (!this.aiService || !this.currentLivestream) {
+    if ((!this.aiService && !this.aiVoiceService) || !this.currentLivestream) {
       return;
     }
 
     try {
-      // Create a summary of all messages
-      const messageSummary = messages
-        .filter(msg => msg.type === "textMessageEvent")
-        .map(msg => `${msg.authorName}: ${msg.message}`)
-        .join('\n');
+      // Filter out non-text messages
+      const textMessages = messages.filter(
+        (msg) => msg.type === "textMessageEvent"
+      );
 
-      if (!messageSummary.trim()) {
+      if (textMessages.length === 0) {
         return;
       }
-
-      // Create a single message object for the AI to process
-      const batchMessage: LiveChatMessage = {
-        id: `batch-${Date.now()}`,
-        authorName: "Multiple Users",
-        message: `New messages in chat:\n${messageSummary}`,
-        timestamp: new Date().toISOString(),
-        type: "textMessageEvent",
-      };
 
       const context: ChatContext = {
         livestreamTitle: this.currentLivestream.title,
@@ -243,17 +260,52 @@ export class LivestreamMonitor {
         viewerCount: this.currentLivestream.viewerCount,
       };
 
-      const aiResponse = await this.aiService.processMessage(batchMessage, context);
-      
-      if (aiResponse.shouldReply && aiResponse.message && this.currentLivestream.liveChatId) {
+      let aiResponse: any;
+
+      // Use voice service if available, otherwise use regular AI service
+      if (this.aiVoiceService) {
+        const result = await this.aiVoiceService.processBatchWithVoice(
+          textMessages,
+          context
+        );
+        aiResponse = result.aiResponse;
+      } else if (this.aiService) {
+        // For regular AI service, create a summary but keep individual usernames
+        const messageSummary = textMessages
+          .map((msg) => `${msg.authorName}: ${msg.message}`)
+          .join("\n");
+
+        const batchMessage: LiveChatMessage = {
+          id: `batch-${Date.now()}`,
+          authorName: "Chat", // Changed from "Multiple Users" to "Chat"
+          message: `New messages in chat:\n${messageSummary}`,
+          timestamp: new Date().toISOString(),
+          type: "textMessageEvent",
+        };
+
+        aiResponse = await this.aiService.processMessage(batchMessage, context);
+      } else {
+        return;
+      }
+
+      if (
+        aiResponse.shouldReply &&
+        aiResponse.message &&
+        this.currentLivestream.liveChatId
+      ) {
         const timestamp = new Date().toLocaleTimeString();
-        console.log(`\x1b[34m[${timestamp}] 🤖 BOT: ${aiResponse.message}\x1b[0m`);
+        console.log(
+          `\x1b[34m[${timestamp}] 🤖 BOT: ${aiResponse.message}\x1b[0m`
+        );
         if (aiResponse.reason) {
           this.logger.debug(`AI Reason: ${aiResponse.reason}`);
         }
-        
+
         // Actually send the message to YouTube chat
-        await this.sendChatMessage(this.currentLivestream.liveChatId, aiResponse.message);
+        await this.sendChatMessage(
+          this.currentLivestream.liveChatId,
+          aiResponse.message
+        );
       } else if (aiResponse.reason) {
         this.logger.debug(`AI decided not to reply: ${aiResponse.reason}`);
       }
