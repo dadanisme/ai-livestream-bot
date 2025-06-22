@@ -1,6 +1,7 @@
-import dotenv from "dotenv";
+import * as dotenv from "dotenv";
 import { YouTubeBot } from "./YouTubeBot";
 import { Logger } from "./utils/Logger";
+import { getAIConfig, HOLLOW_KNIGHT_PROMPT } from "./config/aiConfig";
 
 // Load environment variables
 dotenv.config();
@@ -11,6 +12,12 @@ async function main() {
   try {
     logger.info("Starting YouTube Livestream Bot...");
 
+    // Choose your AI configuration:
+    // - getAIConfig() - Default general purpose
+    // - GAMING_AI_CONFIG - Optimized for gaming streams
+    // - EDUCATIONAL_AI_CONFIG - Optimized for educational content
+    // - getAIConfig({ custom: "settings" }) - Custom configuration
+    
     const bot = new YouTubeBot({
       clientId: process.env.YOUTUBE_CLIENT_ID!,
       clientSecret: process.env.YOUTUBE_CLIENT_SECRET!,
@@ -18,6 +25,11 @@ async function main() {
       channelId: process.env.CHANNEL_ID!,
       webhookUrl: process.env.WEBHOOK_URL,
       maxRetries: 1,
+      // AI Configuration
+      enableAI: true,
+      ai: getAIConfig({
+        systemPrompt: HOLLOW_KNIGHT_PROMPT,
+      }),
     });
 
     await bot.start();

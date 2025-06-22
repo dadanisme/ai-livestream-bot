@@ -1,3 +1,5 @@
+import { AIConfig } from "./AITypes";
+
 export interface BotConfig {
   // OAuth2 credentials
   clientId: string;
@@ -11,4 +13,8 @@ export interface BotConfig {
   webhookUrl?: string;
   checkInterval?: number; // in milliseconds, default 30000 (30 seconds)
   maxRetries?: number; // default 3
+  
+  // AI configuration
+  ai?: AIConfig;
+  enableAI?: boolean; // default false
 } 

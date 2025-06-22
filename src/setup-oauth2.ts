@@ -27,10 +27,10 @@ async function setupOAuth2() {
 }
 
 // Show instructions if no arguments provided
-// if (process.argv.length === 2) {
-//   OAuth2Setup.printSetupInstructions();
-//   console.log("\nTo run the setup, use:");
-//   console.log("npm run setup-oauth2");
-// } else {
+if (process.argv.length === 2) {
+  OAuth2Setup.printSetupInstructions();
+  console.log("\nTo run the setup, use:");
+  console.log("npm run setup-oauth2");
+} else {
   setupOAuth2();
-// }
+}

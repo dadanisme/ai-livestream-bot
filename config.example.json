@@ -1,7 +1,0 @@
-{
-  "apiKey": "your_youtube_api_key_here",
-  "channelId": "UCyour_channel_id_here",
-  "webhookUrl": "https://your-webhook-url.com/endpoint",
-  "checkInterval": 30000,
-  "maxRetries": 3
-} 
