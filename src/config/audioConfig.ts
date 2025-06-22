@@ -8,6 +8,9 @@ export const DEFAULT_TTS_CONFIG: TTSConfig = {
   language: "en-US",
   audioFormat: "MP3",
   outputDir: "./audio-output",
+  speakingRate: 1.2,
+  pitch: 1.5,
+  volumeGainDb: 2.0
 };
 
 // Default Audio Stream Configuration

@@ -1,51 +1,63 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { Chat, GoogleGenAI, Type } from "@google/genai";
 import { Logger } from "../utils/Logger";
 import { AIConfig, AIResponse, ChatContext } from "../types/AITypes";
 import { LiveChatMessage } from "../types/YouTubeTypes";
 
 export class AIService {
-  private genAI: GoogleGenAI;
   private logger: Logger;
   private config: AIConfig;
   private recentMessages: LiveChatMessage[] = [];
   private maxMessageHistory: number = 10;
+  private chat: Chat;
 
   // Schema for structured AI response
   private readonly responseSchema = {
-    description: 'AI response to a YouTube livestream chat message',
+    description: "AI response to a YouTube livestream chat message",
     type: Type.OBJECT,
     properties: {
       shouldReply: {
         type: Type.BOOLEAN,
-        description: 'Whether the AI should reply to this message',
+        description: "Whether the AI should reply to this message",
         nullable: false,
       },
       confidence: {
         type: Type.NUMBER,
-        description: 'Confidence level of the response (0-1)',
+        description: "Confidence level of the response (0-1)",
         nullable: false,
       },
       message: {
         type: Type.STRING,
-        description: 'The response message to send (empty if shouldReply is false)',
+        description:
+          "The response message to send (empty if shouldReply is false)",
         nullable: false,
       },
       reason: {
         type: Type.STRING,
-        description: 'Brief reason for the decision to reply or not reply',
+        description: "Brief reason for the decision to reply or not reply",
         nullable: false,
       },
     },
-    required: ['shouldReply', 'confidence', 'message', 'reason'],
+    required: ["shouldReply", "confidence", "message", "reason"],
   };
 
   constructor(config: AIConfig) {
     this.config = config;
     this.logger = new Logger("AIService");
-    
-    // Initialize Google Generative AI
-    this.genAI = new GoogleGenAI({
+
+    const genAI = new GoogleGenAI({
       apiKey: config.apiKey,
+    });
+
+    // Initialize Google Generative AI
+    this.chat = genAI.chats.create({
+      model: this.config.model,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: this.responseSchema,
+        maxOutputTokens: this.config.maxTokens,
+        temperature: this.config.temperature,
+        systemInstruction: this.config.systemPrompt,
+      },
     });
   }
 
@@ -57,7 +69,9 @@ export class AIService {
     context: ChatContext
   ): Promise<AIResponse> {
     try {
-      this.logger.debug(`Processing message from ${message.authorName}: ${message.message}`);
+      this.logger.debug(
+        `Processing message from ${message.authorName}: ${message.message}`
+      );
 
       // Add message to recent history
       this.addToMessageHistory(message);
@@ -66,17 +80,10 @@ export class AIService {
       const prompt = this.createPrompt(message, context);
 
       // Generate response from AI using structured output
-      const result = await this.genAI.models.generateContent({
-        model: this.config.model,
-        contents: [{ parts: [{ text: prompt }] }],
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: this.responseSchema,
-        },
-      });
+      const result = await this.chat.sendMessage({ message: prompt });
 
-      const responseText = result.candidates?.[0]?.content?.parts?.[0]?.text || "";
-      
+      const responseText = result?.text || "";
+
       // Parse the structured JSON response
       const aiResponse = this.parseStructuredResponse(responseText);
 
@@ -99,15 +106,15 @@ export class AIService {
   private createPrompt(message: LiveChatMessage, context: ChatContext): string {
     const recentMessagesText = this.recentMessages
       .slice(-5) // Last 5 messages
-      .map(msg => `${msg.authorName}: ${msg.message}`)
-      .join('\n');
+      .map((msg) => `${msg.authorName}: ${msg.message}`)
+      .join("\n");
 
     return `${this.config.systemPrompt}
 
 Livestream Context:
 - Title: ${context.livestreamTitle}
 - Description: ${context.livestreamDescription}
-- Viewer Count: ${context.viewerCount || 'Unknown'}
+- Viewer Count: ${context.viewerCount || "Unknown"}
 
 Recent Chat Messages:
 ${recentMessagesText}
@@ -135,7 +142,7 @@ Respond with a JSON object containing:
   private parseStructuredResponse(responseText: string): AIResponse {
     try {
       const parsed = JSON.parse(responseText);
-      
+
       return {
         message: parsed.message || "",
         shouldReply: parsed.shouldReply || false,
@@ -158,7 +165,7 @@ Respond with a JSON object containing:
    */
   private addToMessageHistory(message: LiveChatMessage): void {
     this.recentMessages.push(message);
-    
+
     // Keep only the most recent messages
     if (this.recentMessages.length > this.maxMessageHistory) {
       this.recentMessages = this.recentMessages.slice(-this.maxMessageHistory);
@@ -178,4 +185,4 @@ Respond with a JSON object containing:
   updateConfig(newConfig: Partial<AIConfig>): void {
     this.config = { ...this.config, ...newConfig };
   }
-} 
+}

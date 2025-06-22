@@ -9,6 +9,9 @@ export interface TTSConfig {
   language: string;
   audioFormat: 'MP3' | 'WAV' | 'OGG';
   outputDir: string;
+  speakingRate: number;
+  pitch: number;
+  volumeGainDb: number;
 }
 
 export class TTSService {
@@ -42,9 +45,9 @@ export class TTSService {
         },
         audioConfig: {
           audioEncoding: this.getAudioEncoding(),
-          speakingRate: 1.0,
-          pitch: 0.0,
-          volumeGainDb: 0.0,
+          speakingRate: this.config.speakingRate,
+          pitch: this.config.pitch,
+          volumeGainDb: this.config.volumeGainDb,
         },
       };
 

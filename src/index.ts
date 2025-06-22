@@ -2,6 +2,7 @@ import * as dotenv from "dotenv";
 import { YouTubeBot } from "./YouTubeBot";
 import { Logger } from "./utils/Logger";
 import { getAIConfig, HOLLOW_KNIGHT_PROMPT } from "./config/aiConfig";
+import { getVoiceConfig } from "./config/voiceConfig";
 
 // Load environment variables
 dotenv.config();
@@ -17,6 +18,15 @@ async function main() {
     // - GAMING_AI_CONFIG - Optimized for gaming streams
     // - EDUCATIONAL_AI_CONFIG - Optimized for educational content
     // - getAIConfig({ custom: "settings" }) - Custom configuration
+    
+    // Choose your voice configuration:
+    // - INDONESIAN_ENERGETIC: Fast, high-pitched Indonesian female
+    // - INDONESIAN_NORMAL: Normal speed Indonesian female
+    // - INDONESIAN_MALE: Indonesian male voice
+    // - ENGLISH_ENERGETIC: Fast, high-pitched English female
+    // - ENGLISH_NORMAL: Normal speed English female
+    // - ENGLISH_MALE: English male voice
+    const voiceConfig = getVoiceConfig("INDONESIAN_LOUD");
     
     const bot = new YouTubeBot({
       clientId: process.env.YOUTUBE_CLIENT_ID!,
@@ -40,14 +50,15 @@ async function main() {
           projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
           keyFilename: process.env.GOOGLE_CLOUD_KEY_FILE,
           voice: {
-            languageCode: "id-ID",
-            name: "id-ID-Standard-A",
-            ssmlGender: "FEMALE"
+            languageCode: voiceConfig.language,
+            name: voiceConfig.voice,
+            ssmlGender: voiceConfig.gender
           },
           audioConfig: {
             audioEncoding: "MP3",
-            speakingRate: 2,
-            pitch: 0.5
+            speakingRate: voiceConfig.speakingRate,
+            pitch: voiceConfig.pitch,
+            volumeGainDb: voiceConfig.volumeGainDb
           }
         },
         audioStreamConfig: {
@@ -62,6 +73,7 @@ async function main() {
     await bot.start();
 
     logger.info("Bot started successfully!");
+    logger.info(`🎤 Using voice: ${voiceConfig.voice} (${voiceConfig.language})`);
 
     // Keep the process running
     process.on("SIGINT", async () => {

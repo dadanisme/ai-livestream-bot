@@ -33,6 +33,9 @@ export class AIVoiceService {
         language: config.ttsConfig.voice.languageCode,
         audioFormat: config.ttsConfig.audioConfig.audioEncoding,
         outputDir: config.audioStreamConfig.outputPath,
+        speakingRate: config.ttsConfig.audioConfig.speakingRate,
+        pitch: config.ttsConfig.audioConfig.pitch,
+        volumeGainDb: config.ttsConfig.audioConfig.volumeGainDb
       });
       this.logger.info("�� TTS service initialized");
     }
