@@ -48,6 +48,24 @@ export class AIService {
       apiKey: config.apiKey,
     });
 
+    // Enhanced system prompt with livestream context and response format
+    const enhancedSystemPrompt = `${this.config.systemPrompt}
+
+You are an AI assistant for a YouTube livestream chat. Your role is to:
+- Analyze incoming chat messages
+- Determine if a response is needed
+- Provide natural, engaging responses when appropriate
+- Keep responses concise and relevant to the livestream
+- Be friendly and supportive to the community
+
+IMPORTANT: Always respond with a JSON object containing:
+- shouldReply: boolean (true if you should respond, false otherwise)
+- confidence: number (0-1, how confident you are in your decision)
+- message: string (your response message if shouldReply is true, empty string otherwise)
+- reason: string (brief explanation of your decision)
+
+The livestream context will be provided in the conversation as needed.`;
+
     // Initialize Google Generative AI
     this.chat = genAI.chats.create({
       model: this.config.model,
@@ -56,31 +74,26 @@ export class AIService {
         responseSchema: this.responseSchema,
         maxOutputTokens: this.config.maxTokens,
         temperature: this.config.temperature,
-        systemInstruction: this.config.systemPrompt,
+        systemInstruction: enhancedSystemPrompt,
       },
     });
   }
 
   /**
-   * Process a chat message and determine if/how to respond
+   * Process chat messages and determine if/how to respond
    */
-  async processMessage(
-    message: LiveChatMessage,
-    context: ChatContext
-  ): Promise<AIResponse> {
+  async processMessage(messages: LiveChatMessage[]): Promise<AIResponse> {
     try {
-      this.logger.debug(
-        `Processing message from ${message.authorName}: ${message.message}`
-      );
+      this.logger.debug(`Processing ${messages.length} messages from chat`);
 
-      // Add message to recent history
-      this.addToMessageHistory(message);
+      // Add messages to recent history
+      messages.forEach((message) => this.addToMessageHistory(message));
 
-      // Create the prompt for the AI
-      const prompt = this.createPrompt(message, context);
-
-      // Generate response from AI using structured output
-      const result = await this.chat.sendMessage({ message: prompt });
+      // Send the messages as an array to the chat session
+      // The chat session maintains context automatically
+      const result = await this.chat.sendMessage({
+        message: messages.map((msg) => `${msg.authorName}: ${msg.message}`),
+      });
 
       const responseText = result?.text || "";
 
@@ -90,50 +103,14 @@ export class AIService {
       this.logger.debug(`AI Response: ${JSON.stringify(aiResponse)}`);
       return aiResponse;
     } catch (error) {
-      this.logger.error("Error processing message with AI:", error);
+      this.logger.error("Error processing messages with AI:", error);
       return {
         message: "",
         shouldReply: false,
         confidence: 0,
-        reason: "Error processing message",
+        reason: "Error processing messages",
       };
     }
-  }
-
-  /**
-   * Create a prompt for the AI based on the message and context
-   */
-  private createPrompt(message: LiveChatMessage, context: ChatContext): string {
-    const recentMessagesText = this.recentMessages
-      .slice(-5) // Last 5 messages
-      .map((msg) => `${msg.authorName}: ${msg.message}`)
-      .join("\n");
-
-    return `${this.config.systemPrompt}
-
-Livestream Context:
-- Title: ${context.livestreamTitle}
-- Description: ${context.livestreamDescription}
-- Viewer Count: ${context.viewerCount || "Unknown"}
-
-Recent Chat Messages:
-${recentMessagesText}
-
-Current Message:
-${message.authorName}: ${message.message}
-
-Instructions:
-1. Analyze if this message requires a response
-2. If yes, provide a natural, engaging response
-3. Keep responses concise and relevant to the livestream
-4. Be friendly and supportive to the community
-5. Provide a brief reason for your decision
-
-Respond with a JSON object containing:
-- shouldReply: boolean (true if you should respond, false otherwise)
-- confidence: number (0-1, how confident you are in your decision)
-- message: string (your response message if shouldReply is true, empty string otherwise)
-- reason: string (brief explanation of your decision)`;
   }
 
   /**
@@ -184,5 +161,24 @@ Respond with a JSON object containing:
    */
   updateConfig(newConfig: Partial<AIConfig>): void {
     this.config = { ...this.config, ...newConfig };
+  }
+
+  /**
+   * Update livestream context in the chat session
+   */
+  async updateLivestreamContext(context: ChatContext): Promise<void> {
+    try {
+      const contextMessage = `Livestream Context Update:
+Title: ${context.livestreamTitle}
+Description: ${context.livestreamDescription}
+Viewer Count: ${context.viewerCount || "Unknown"}
+
+Please use this context for future responses.`;
+
+      await this.chat.sendMessage({ message: contextMessage });
+      this.logger.debug("Updated livestream context in chat session");
+    } catch (error) {
+      this.logger.error("Error updating livestream context:", error);
+    }
   }
 }

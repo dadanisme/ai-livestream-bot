@@ -4,7 +4,7 @@ import { LivestreamInfo, LiveChatMessage } from "./types/YouTubeTypes";
 import { youtube_v3 } from "googleapis";
 import { AIService } from "./services/AIService";
 import { AIVoiceService } from "./services/AIVoiceService";
-import { ChatContext } from "./types/AITypes";
+import { AIResponse } from "./types/AITypes";
 
 export class LivestreamMonitor {
   private youtube: youtube_v3.Youtube;
@@ -17,7 +17,11 @@ export class LivestreamMonitor {
   private aiService?: AIService;
   private aiVoiceService?: AIVoiceService;
   private lastMessageTime: number = 0;
+
+  // Interval constants for easier management
   private readonly MESSAGE_COOLDOWN = 3000; // 3 seconds between messages
+  private readonly LIVESTREAM_CHECK_INTERVAL = 30000; // 30 seconds
+  private readonly CHAT_FETCH_INTERVAL = 10000; // 10 seconds
 
   constructor(youtube: youtube_v3.Youtube, config: BotConfig, logger: Logger) {
     this.youtube = youtube;
@@ -46,8 +50,9 @@ export class LivestreamMonitor {
     this.logger.info("Starting livestream monitor...");
     await this.checkLivestreams();
     this.intervalId = setInterval(async () => {
-      await this.checkLivestreams();
-    }, 30000); // 30 seconds
+      // await this.checkLivestreams();
+      this.logger.info("Checking livestreams...");
+    }, this.LIVESTREAM_CHECK_INTERVAL);
   }
 
   async stop(): Promise<void> {
@@ -136,7 +141,7 @@ export class LivestreamMonitor {
 
     this.chatIntervalId = setInterval(async () => {
       await this.fetchChatMessages(liveChatId);
-    }, 5000);
+    }, this.CHAT_FETCH_INTERVAL);
   }
 
   private async stopChatMonitoring(): Promise<void> {
@@ -183,7 +188,8 @@ export class LivestreamMonitor {
         }))
         .filter(
           (chatMessage) =>
-            !chatMessage.authorChannelId || chatMessage.authorChannelId !== this.config.channelId
+            !chatMessage.authorChannelId ||
+            chatMessage.authorChannelId !== this.config.channelId
           // true
         );
 
@@ -253,37 +259,17 @@ export class LivestreamMonitor {
         return;
       }
 
-      const context: ChatContext = {
-        livestreamTitle: this.currentLivestream.title,
-        livestreamDescription: this.currentLivestream.description,
-        recentMessages: [],
-        viewerCount: this.currentLivestream.viewerCount,
-      };
-
-      let aiResponse: any;
+      let aiResponse: AIResponse;
 
       // Use voice service if available, otherwise use regular AI service
       if (this.aiVoiceService) {
         const result = await this.aiVoiceService.processBatchWithVoice(
-          textMessages,
-          context
+          textMessages
         );
         aiResponse = result.aiResponse;
       } else if (this.aiService) {
-        // For regular AI service, create a summary but keep individual usernames
-        const messageSummary = textMessages
-          .map((msg) => `${msg.authorName}: ${msg.message}`)
-          .join("\n");
-
-        const batchMessage: LiveChatMessage = {
-          id: `batch-${Date.now()}`,
-          authorName: "Chat", // Changed from "Multiple Users" to "Chat"
-          message: `New messages in chat:\n${messageSummary}`,
-          timestamp: new Date().toISOString(),
-          type: "textMessageEvent",
-        };
-
-        aiResponse = await this.aiService.processMessage(batchMessage, context);
+        // Pass the array of messages directly to the AI service
+        aiResponse = await this.aiService.processMessage(textMessages);
       } else {
         return;
       }

@@ -3,7 +3,6 @@ import { TTSService } from "./TTSService";
 import { AudioStreamService } from "./AudioStreamService";
 import { Logger } from "../utils/Logger";
 import { LiveChatMessage } from "../types/YouTubeTypes";
-import { ChatContext } from "../types/AITypes";
 import { exec } from "child_process";
 
 export interface AIVoiceConfig {
@@ -37,7 +36,7 @@ export class AIVoiceService {
         pitch: config.ttsConfig.audioConfig.pitch,
         volumeGainDb: config.ttsConfig.audioConfig.volumeGainDb
       });
-      this.logger.info("�� TTS service initialized");
+      this.logger.info("🎤 TTS service initialized");
     }
 
     // Initialize audio stream service if enabled
@@ -51,12 +50,11 @@ export class AIVoiceService {
    * Process message with AI and generate audio response
    */
   async processMessageWithVoice(
-    message: LiveChatMessage,
-    context: ChatContext
+    messages: LiveChatMessage[]
   ): Promise<{ aiResponse: any; audioPath?: string }> {
     try {
       // Get AI response
-      const aiResponse = await this.aiService.processMessage(message, context);
+      const aiResponse = await this.aiService.processMessage(messages);
 
       // Generate audio if TTS is enabled and AI decided to reply
       let audioPath: string | undefined;
@@ -88,31 +86,18 @@ export class AIVoiceService {
    * Process batch of messages with AI and generate audio response
    */
   async processBatchWithVoice(
-    messages: LiveChatMessage[],
-    context: ChatContext
+    messages: LiveChatMessage[]
   ): Promise<{ aiResponse: any; audioPath?: string }> {
     try {
-      // Create a summary of all messages with individual usernames
-      const messageSummary = messages
-        .filter(msg => msg.type === "textMessageEvent")
-        .map(msg => `${msg.authorName}: ${msg.message}`)
-        .join('\n');
+      // Filter out non-text messages
+      const textMessages = messages.filter(msg => msg.type === "textMessageEvent");
 
-      if (!messageSummary.trim()) {
+      if (textMessages.length === 0) {
         return { aiResponse: { shouldReply: false, message: "", confidence: 0, reason: "No valid messages" } };
       }
 
-      // Create a single message object for the AI to process
-      const batchMessage: LiveChatMessage = {
-        id: `batch-${Date.now()}`,
-        authorName: "Chat", // Changed from "Multiple Users" to "Chat"
-        message: `New messages in chat:\n${messageSummary}`,
-        timestamp: new Date().toISOString(),
-        type: "textMessageEvent",
-      };
-
       // Process with AI and generate audio
-      return await this.processMessageWithVoice(batchMessage, context);
+      return await this.processMessageWithVoice(textMessages);
     } catch (error) {
       this.logger.error("Error processing batch with voice:", error);
       throw error;

@@ -26,8 +26,8 @@ async function main() {
     // - ENGLISH_ENERGETIC: Fast, high-pitched English female
     // - ENGLISH_NORMAL: Normal speed English female
     // - ENGLISH_MALE: English male voice
-    const voiceConfig = getVoiceConfig("INDONESIAN_LOUD");
-    
+    const voiceConfig = getVoiceConfig("INDONESIAN_MALE");
+
     const bot = new YouTubeBot({
       clientId: process.env.YOUTUBE_CLIENT_ID!,
       clientSecret: process.env.YOUTUBE_CLIENT_SECRET!,
@@ -52,28 +52,30 @@ async function main() {
           voice: {
             languageCode: voiceConfig.language,
             name: voiceConfig.voice,
-            ssmlGender: voiceConfig.gender
+            ssmlGender: voiceConfig.gender,
           },
           audioConfig: {
             audioEncoding: "MP3",
             speakingRate: voiceConfig.speakingRate,
             pitch: voiceConfig.pitch,
-            volumeGainDb: voiceConfig.volumeGainDb
-          }
+            volumeGainDb: voiceConfig.volumeGainDb,
+          },
         },
         audioStreamConfig: {
           // Audio streaming configuration
           outputPath: "./audio_output",
           format: "mp3",
-          sampleRate: 22050
-        }
-      }
+          sampleRate: 22050,
+        },
+      },
     });
 
     await bot.start();
 
     logger.info("Bot started successfully!");
-    logger.info(`🎤 Using voice: ${voiceConfig.voice} (${voiceConfig.language})`);
+    logger.info(
+      `🎤 Using voice: ${voiceConfig.voice} (${voiceConfig.language})`
+    );
 
     // Keep the process running
     process.on("SIGINT", async () => {
